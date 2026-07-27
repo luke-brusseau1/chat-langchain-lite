@@ -15,7 +15,13 @@ jobs:
     if: contains(github.event.pull_request.labels.*.name, 'run-evals')
     runs-on: ubuntu-latest
     env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # Everything routes through the LangSmith gateway — the agent model
+      # (utils/models.py) and the LLM-judge (evals/evaluators.py's Anthropic()).
+      # One gateway service key powers both; ANTHROPIC_BASE_URL makes the judge's
+      # bare Anthropic() client use the gateway instead of api.anthropic.com.
+      LANGSMITH_API_KEY_GATEWAY: ${{ secrets.LANGSMITH_API_KEY_GATEWAY }}
+      ANTHROPIC_API_KEY: ${{ secrets.LANGSMITH_API_KEY_GATEWAY }}
+      ANTHROPIC_BASE_URL: "https://gateway.smith.langchain.com/anthropic"
       LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
       LANGSMITH_PROJECT: ${{ secrets.LANGSMITH_PROJECT }}
       LANGSMITH_WORKSPACE_ID: ${{ secrets.LANGSMITH_WORKSPACE_ID }}
