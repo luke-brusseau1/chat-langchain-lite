@@ -44,8 +44,8 @@ def _readonly_context_hub_fs() -> FilesystemMiddleware:
 def build_agent():
     return create_agent(
         # temperature=0 for deterministic, reproducible demo behavior — the
-        # intentional bugs (tone, scope, truncation) come from the prompt and
-        # max_tokens, not sampling, so pinning temperature keeps traces consistent.
+        # intentional bugs (tone, scope) come from the prompt, not sampling, so
+        # pinning temperature keeps traces consistent.
         model=model,
         tools=TOOLS,
         system_prompt=SYSTEM_PROMPT,
