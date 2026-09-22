@@ -88,6 +88,61 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 ```""",
 
+    "agent": """Build an agent with middleware, persistence, and streaming using
+`create_agent` from `langchain.agents` — this is the supported entrypoint and
+the only one that accepts `middleware=[...]`. `langgraph.prebuilt.create_react_agent`
+has no `middleware` parameter; passing one raises a TypeError.
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import wrap_model_call
+from langchain_core.tools import tool
+from langgraph.checkpoint.memory import InMemorySaver
+
+
+@tool
+def get_weather(city: str) -> str:
+    \"\"\"Get the current weather for a city.\"\"\"
+    return f"It's sunny in {city}."
+
+
+@wrap_model_call
+def log_model_call(request, handler):
+    response = handler(request)
+    print("model call complete")
+    return response
+
+
+checkpointer = InMemorySaver()
+
+agent = create_agent(
+    model="anthropic:claude-sonnet-4-5",
+    tools=[get_weather],
+    system_prompt="You are a helpful assistant.",
+    middleware=[log_model_call],
+    checkpointer=checkpointer,
+)
+
+config = {"configurable": {"thread_id": "demo-thread"}}
+
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": "What's the weather in Paris?"}]},
+    config=config,
+)
+
+for chunk, metadata in agent.stream(
+    {"messages": [{"role": "user", "content": "And in Tokyo?"}]},
+    config=config,
+    stream_mode="messages",
+):
+    print(chunk.content, end="")
+```
+
+Middleware objects are built with the `langchain.agents.middleware` decorators
+(`wrap_model_call`, `wrap_tool_call`, `before_model`, `after_model`) or by
+subclassing `AgentMiddleware` — never plain dicts. The `thread_id` in `config`
+is what ties an invocation to persisted state in the checkpointer.""",
+
     "deployment": """LangGraph apps can be deployed on the LangGraph Platform:
 
 1. Add a langgraph.json at the project root pointing to your compiled graph.
@@ -157,7 +212,7 @@ def lookup_concept(concept_name: str) -> str:
 
 @tool
 def get_setup_guide(topic: str) -> str:
-    """Get a setup or how-to guide for a LangChain ecosystem topic. Topics: installation, environment, deployment, evaluation."""
+    """Get a setup or how-to guide for a LangChain ecosystem topic. Topics: installation, environment, agent, deployment, evaluation."""
     key = topic.lower().strip()
     for db_key, content in SETUP_GUIDES_DB.items():
         if key in db_key or db_key in key:
