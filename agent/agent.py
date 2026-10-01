@@ -1,4 +1,5 @@
 import os
+import uuid
 
 from langchain.agents import create_agent
 from langchain_anthropic import ChatAnthropic
@@ -10,6 +11,7 @@ from deepagents.backends.context_hub import ContextHubBackend
 
 from agent.tools import TOOLS
 from context import CONTEXT_HUB_REPO, get_prompt
+from utils.environment import environment
 from utils.streaming import iter_text
 from utils.models import model
 
@@ -53,10 +55,20 @@ def build_agent():
     )
 
 
-def _config(thread_id: str | None = None) -> RunnableConfig:
-    metadata = {"demo": "true", "demo_type": "chat-lc-lite", "model": _model_id()}
-    if thread_id:
-        metadata["thread_id"] = thread_id
+def _config(thread_id: str | None = None, user_id: str | None = None) -> RunnableConfig:
+    metadata = {
+        "demo": "true",
+        "demo_type": "chat-lc-lite",
+        "model": _model_id(),
+        "environment": environment(),
+        # Always carry a thread id: a caller with no conversation of its own gets
+        # a fresh single-turn thread, so no root run lands outside the Threads view.
+        "thread_id": thread_id or str(uuid.uuid4()),
+    }
+    # Omit `user_id` entirely when unknown — an empty string reads as an
+    # instrumented-but-anonymous user and breaks per-user filtering.
+    if user_id:
+        metadata["user_id"] = user_id
     return RunnableConfig(
         run_name="chat-lc-lite-demo",
         metadata=metadata,
@@ -68,9 +80,11 @@ def _user_msg(question: str) -> dict:
     return {"messages": [{"role": "user", "content": question}]}
 
 
-def invoke_agent(question: str, thread_id: str | None = None) -> dict:
+def invoke_agent(
+    question: str, thread_id: str | None = None, user_id: str | None = None
+) -> dict:
     """Run the agent once. Returns {output, tools_called, messages}."""
-    result = build_agent().invoke(_user_msg(question), _config(thread_id))
+    result = build_agent().invoke(_user_msg(question), _config(thread_id, user_id))
     output = next(
         (m.content for m in reversed(result["messages"])
          if isinstance(getattr(m, "content", None), str) and m.content),
@@ -80,10 +94,12 @@ def invoke_agent(question: str, thread_id: str | None = None) -> dict:
     return {"output": output, "tools_called": tools_called, "messages": result["messages"]}
 
 
-def stream_agent(question: str, thread_id: str | None = None):
+def stream_agent(
+    question: str, thread_id: str | None = None, user_id: str | None = None
+):
     """Stream the agent's response text as it's generated."""
     for chunk, _meta in build_agent().stream(
-        _user_msg(question), _config(thread_id), stream_mode="messages"
+        _user_msg(question), _config(thread_id, user_id), stream_mode="messages"
     ):
         if isinstance(chunk, AIMessageChunk):
             yield from iter_text(chunk)
