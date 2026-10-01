@@ -4,6 +4,9 @@ A single `assertion_evaluator` consumes each example's `assertions` list
 and produces one feedback row per assertion via LLM-as-judge. This matches
 the format Engine emits when proposing generated examples to a dataset,
 so anything Engine adds is scored the same way.
+
+`response_not_truncated` is a deterministic companion check that fails any
+run whose generation stopped at the model's output-token cap.
 """
 
 from anthropic import Anthropic
@@ -59,6 +62,21 @@ def _judge_assertion(criterion: str, output: str, tools_called: list[str]) -> fl
     )
     answer = response.content[0].text.strip().lower()
     return 1.0 if answer.startswith("yes") else 0.0
+
+
+# Anthropic reports "max_tokens", OpenAI "length", Gemini "max_output_tokens".
+_TRUNCATION_REASONS = {"max_tokens", "length", "max_output_tokens"}
+
+
+def response_not_truncated(run, example) -> dict:
+    """Score 0.0 when the generation stopped because it hit the output cap."""
+    reason = str((run.outputs or {}).get("finish_reason") or "").lower()
+    truncated = reason in _TRUNCATION_REASONS
+    return {
+        "key": "response_not_truncated",
+        "score": 0.0 if truncated else 1.0,
+        "comment": f"finish_reason={reason or '(none)'}",
+    }
 
 
 def assertion_evaluator(run, example) -> dict:

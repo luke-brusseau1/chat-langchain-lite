@@ -38,38 +38,44 @@ def run_agent_on_example(inputs: dict) -> dict:
     if not question:
         return {"output": "", "tools_called": []}
     result = invoke_agent(question=question)
-    return {"output": result["output"], "tools_called": result.get("tools_called", [])}
+    return {
+        "output": result["output"],
+        "tools_called": result.get("tools_called", []),
+        "finish_reason": result.get("finish_reason", ""),
+    }
 
 
 def run_evaluation(experiment_prefix: str) -> dict:
     from langsmith import evaluate
-    from evals.evaluators import assertion_evaluator
+    from evals.evaluators import assertion_evaluator, response_not_truncated
 
     print(f"\nRunning evaluation on dataset '{DATASET_NAME}'...")
 
     results = evaluate(
         run_agent_on_example,
         data=DATASET_NAME,
-        evaluators=[assertion_evaluator],
+        evaluators=[assertion_evaluator, response_not_truncated],
         experiment_prefix=experiment_prefix,
         metadata={"demo": "true", "demo_type": "chat-lc-lite"},
     )
 
-    # One feedback per example: assertion_evaluator returns
-    # {key: "assertions_pass_rate", score: 0.0..1.0}. Overall is the mean
-    # across examples — i.e. the average fraction of assertions met.
-    per_example: list[float] = []
+    # One feedback per evaluator per example: `assertions_pass_rate` is the
+    # fraction of assertions met, `response_not_truncated` is 1/0. Each key is
+    # averaged across examples and the overall is the mean of those averages,
+    # so a truncated answer drags the gate down even when assertions pass.
+    per_key: dict[str, list[float]] = {}
     for result in results:
         for ev in result.get("evaluation_results", {}).get("results", []):
             if ev.score is None:
                 continue
-            per_example.append(ev.score)
+            per_key.setdefault(ev.key, []).append(ev.score)
 
-    overall = sum(per_example) / len(per_example) if per_example else 0.0
-    n = len(per_example)
+    averages = {key: sum(scores) / len(scores) for key, scores in per_key.items()}
+    overall = sum(averages.values()) / len(averages) if averages else 0.0
     print(f"\nResults:")
-    print(f"  assertions_pass_rate  {overall:.2f}  (avg across {n} examples)")
-    return {"assertions_pass_rate": overall, "__overall__": overall}
+    for key, average in averages.items():
+        print(f"  {key}  {average:.2f}  (avg across {len(per_key[key])} examples)")
+    return {**averages, "__overall__": overall}
 
 
 def check_threshold(scores: dict, threshold: float) -> bool:
