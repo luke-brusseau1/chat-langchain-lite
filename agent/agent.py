@@ -68,8 +68,18 @@ def _user_msg(question: str) -> dict:
     return {"messages": [{"role": "user", "content": question}]}
 
 
+def _finish_reason(messages) -> str:
+    """Stop reason of the latest generation ('length'/'max_tokens' when capped)."""
+    for m in reversed(messages):
+        metadata = getattr(m, "response_metadata", None) or {}
+        reason = metadata.get("finish_reason") or metadata.get("stop_reason")
+        if reason:
+            return str(reason)
+    return ""
+
+
 def invoke_agent(question: str, thread_id: str | None = None) -> dict:
-    """Run the agent once. Returns {output, tools_called, messages}."""
+    """Run the agent once. Returns {output, tools_called, finish_reason, messages}."""
     result = build_agent().invoke(_user_msg(question), _config(thread_id))
     output = next(
         (m.content for m in reversed(result["messages"])
@@ -77,7 +87,12 @@ def invoke_agent(question: str, thread_id: str | None = None) -> dict:
         "",
     )
     tools_called = [m.name for m in result["messages"] if isinstance(m, ToolMessage)]
-    return {"output": output, "tools_called": tools_called, "messages": result["messages"]}
+    return {
+        "output": output,
+        "tools_called": tools_called,
+        "finish_reason": _finish_reason(result["messages"]),
+        "messages": result["messages"],
+    }
 
 
 def stream_agent(question: str, thread_id: str | None = None):
