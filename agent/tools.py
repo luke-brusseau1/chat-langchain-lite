@@ -1,5 +1,15 @@
 from langchain_core.tools import tool
 
+# Supported Python floors per package. CONCEPTS_DB and the installation guide
+# below both read from this so the two canned sources cannot report different
+# versions for the same package.
+MIN_PYTHON = {
+    "langchain": "3.10+",
+    "langgraph": "3.10+",
+    "langsmith": "3.9+",
+    "deepagents": "3.10+",
+}
+
 # Canned documentation snippets for the most-asked LangChain ecosystem concepts.
 # Stand-in for what would normally be a Mintlify / docs search call so the demo
 # stays self-contained.
@@ -8,7 +18,7 @@ CONCEPTS_DB = {
         "tagline": "The framework for building LLM applications.",
         "first_released": "2022",
         "package": "langchain",
-        "min_python": "3.10+",
+        "min_python": MIN_PYTHON["langchain"],
         "summary": "LangChain provides chains, agents, retrievers, and integrations with 700+ providers. Use it to compose LLM calls with tools, memory, and structured outputs.",
         "primary_use_case": "Composable LLM pipelines, RAG, and agents.",
     },
@@ -16,7 +26,7 @@ CONCEPTS_DB = {
         "tagline": "Build stateful, multi-actor agents as graphs.",
         "first_released": "2024",
         "package": "langgraph",
-        "min_python": "3.7+",
+        "min_python": MIN_PYTHON["langgraph"],
         "summary": "LangGraph models agents as graphs: nodes are functions, edges define control flow, and a typed state object is passed between them. Built-in persistence (checkpointers), interrupts, and streaming.",
         "primary_use_case": "Long-running, multi-step agents and human-in-the-loop workflows.",
     },
@@ -24,7 +34,7 @@ CONCEPTS_DB = {
         "tagline": "Observability and evaluation for LLM apps.",
         "first_released": "2023",
         "package": "langsmith",
-        "min_python": "3.9+",
+        "min_python": MIN_PYTHON["langsmith"],
         "summary": "LangSmith captures traces of every LLM/tool call, lets you create datasets and run evaluations (offline and online), and provides annotation queues for human feedback. Works with any framework, not just LangChain.",
         "primary_use_case": "Tracing, evals, prompt management, and monitoring.",
     },
@@ -32,7 +42,7 @@ CONCEPTS_DB = {
         "tagline": "Long-horizon agents with planning, memory, and subagents.",
         "first_released": "2024",
         "package": "deepagents",
-        "min_python": "3.10+",
+        "min_python": MIN_PYTHON["deepagents"],
         "summary": "Deep Agents wraps create_agent with a TodoList planner, virtual filesystem, and SubAgentMiddleware for context isolation. Inspired by Claude Code's harness pattern.",
         "primary_use_case": "Research, coding, and other tasks that need planning and many tool calls.",
     },
@@ -40,7 +50,7 @@ CONCEPTS_DB = {
         "tagline": "Hooks that wrap an agent's model and tool calls.",
         "first_released": "2024",
         "package": "langchain (langchain.agents.middleware)",
-        "min_python": "3.10+",
+        "min_python": MIN_PYTHON["langchain"],
         "summary": "AgentMiddleware lets you add cross-cutting behavior (retry, fallbacks, guardrails, human-in-the-loop) without modifying the agent itself. Stack middlewares — order matters.",
         "primary_use_case": "Human approval, content guardrails, retries, and structured output.",
     },
@@ -48,14 +58,14 @@ CONCEPTS_DB = {
         "tagline": "Capture every LLM, tool, and chain call automatically.",
         "first_released": "2023",
         "package": "langsmith",
-        "min_python": "3.9+",
+        "min_python": MIN_PYTHON["langsmith"],
         "summary": "Set LANGSMITH_TRACING=true and LANGSMITH_API_KEY in your env. Every LangChain/LangGraph run is traced to LangSmith automatically. For arbitrary Python functions use the @traceable decorator.",
         "primary_use_case": "Debugging agents, building eval datasets from real traffic.",
     },
 }
 
 SETUP_GUIDES_DB = {
-    "installation": """Install the core packages with uv:
+    "installation": f"""Install the core packages with uv:
 
 ```bash
 uv add langchain langgraph langsmith langchain-anthropic
@@ -71,7 +81,7 @@ If you prefer pip:
 pip install -U langchain langgraph langsmith langchain-anthropic
 ```
 
-Minimum supported Python is 3.10 for langchain/langgraph and 3.9 for langsmith.""",
+Minimum supported Python is {MIN_PYTHON['langchain']} for langchain/langgraph, {MIN_PYTHON['langsmith']} for langsmith, and {MIN_PYTHON['deepagents']} for deepagents.""",
 
     "environment": """Recommended environment variables for a typical LangChain + LangSmith app:
 
