@@ -62,7 +62,7 @@ jobs:
       LANGSMITH_PROJECT: ${{ secrets.LANGSMITH_PROJECT }}
       LANGSMITH_WORKSPACE_ID: ${{ secrets.LANGSMITH_WORKSPACE_ID }}
       DEMO_PRESENTER: ${{ vars.DEMO_PRESENTER }}
-      AGENT_MODEL: ${{ vars.AGENT_MODEL || 'gpt-5.4' }}
+      AGENT_MODEL: ${{ vars.AGENT_MODEL || 'gpt-5.5' }}
       EVAL_JUDGE_MODEL: ${{ vars.EVAL_JUDGE_MODEL || 'gpt-5.4-mini' }}
       LANGSMITH_TRACING: "true"
 
@@ -100,6 +100,8 @@ jobs:
             --metadata "commit_sha=${{ github.event.pull_request.head.sha }}" \
             --metadata "branch=${{ github.event.pull_request.head.ref }}" \
             --metadata "ci_run_id=${{ github.run_id }}" \
+            --metadata "agent_model=${AGENT_MODEL}" \
+            --metadata "judge_model=${EVAL_JUDGE_MODEL}" \
             | tee experiment.log
 
           # Extract the CI-parseable lines the script prints.

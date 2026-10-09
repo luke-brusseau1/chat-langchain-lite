@@ -24,7 +24,7 @@ import os
 _DEFAULT_GATEWAY_BASE_URL = "https://gateway.smith.langchain.com"
 
 # The agent model, and the judge model for the offline and online evaluators.
-DEFAULT_AGENT_MODEL = "gpt-5.4"
+DEFAULT_AGENT_MODEL = "gpt-5.5"
 DEFAULT_JUDGE_MODEL = "gpt-5.4-mini"
 
 
