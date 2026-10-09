@@ -1,0 +1,328 @@
+{
+  "name": "chat-lc-lite-golden",
+  "description": "Golden regression suite for Chat LangChain Lite. 16 examples across concept lookup, setup and install, tracing and evals, deployment and persistence, and best practice, plus one out-of-scope row. Reference answers are grounded in agent/tools.py. Rows tagged catches_bug state the TRUE fact where the tool itself is wrong, so they fail until the bug is fixed.",
+  "examples": [
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is LangSmith and what is it used for?"
+          }
+        ]
+      },
+      "outputs": {
+        "expected_tools": [
+          "lookup_concept"
+        ],
+        "reference_answer": "LangSmith is the observability and evaluation platform for LLM apps. First released 2023, package `langsmith`, minimum Python 3.9+. It captures traces of every LLM and tool call, lets you build datasets and run offline and online evaluations, and provides annotation queues for human feedback. It works with any framework, not only LangChain."
+      },
+      "metadata": {
+        "category": "concept_lookup",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What year was LangGraph first released, and what package do I install?"
+          }
+        ]
+      },
+      "outputs": {
+        "expected_tools": [
+          "lookup_concept"
+        ],
+        "reference_answer": "LangGraph was first released in 2024. Install the `langgraph` package."
+      },
+      "metadata": {
+        "category": "concept_lookup",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "I am pinning a Python floor for a monorepo. What is the minimum Python version LangGraph supports?"
+          }
+        ]
+      },
+      "outputs": {
+        "expected_tools": [
+          "get_setup_guide"
+        ],
+        "reference_answer": "LangGraph requires Python 3.10 or newer, the same floor as LangChain. LangSmith supports 3.9+."
+      },
+      "metadata": {
+        "category": "requirements",
+        "difficulty": "hard",
+        "catches_bug": "lookup_concept reports LangGraph min_python as 3.7+; get_setup_guide('installation') reports the correct 3.10. The two tools disagree, so which one the agent reaches for decides whether it is right."
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is the minimum Python version for the langsmith package?"
+          }
+        ]
+      },
+      "outputs": {
+        "expected_tools": [
+          "lookup_concept"
+        ],
+        "reference_answer": "LangSmith supports Python 3.9 and newer."
+      },
+      "metadata": {
+        "category": "requirements",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is Deep Agents?"
+          }
+        ]
+      },
+      "outputs": {
+        "expected_tools": [
+          "lookup_concept"
+        ],
+        "reference_answer": "Deep Agents is a harness for long-horizon agents, first released in 2024 as the `deepagents` package, minimum Python 3.10+. It wraps create_agent with a TodoList planner, a virtual filesystem, and SubAgentMiddleware for context isolation. It is inspired by Claude Code's harness pattern, and suits research, coding, and other tasks that need planning and many tool calls."
+      },
+      "metadata": {
+        "category": "concept_lookup",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is middleware in LangChain, and when should I reach for it?"
+          }
+        ]
+      },
+      "outputs": {
+        "expected_tools": [
+          "lookup_concept"
+        ],
+        "reference_answer": "AgentMiddleware adds cross-cutting behaviour around an agent's model and tool calls without modifying the agent: retries, fallbacks, guardrails, human-in-the-loop, and structured output. It lives in `langchain.agents.middleware` and arrived in 2024. Middlewares stack, and the order matters."
+      },
+      "metadata": {
+        "category": "concept_lookup",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "How do I install LangChain, LangGraph, and LangSmith with uv?"
+          }
+        ]
+      },
+      "outputs": {
+        "expected_tools": [
+          "get_setup_guide"
+        ],
+        "reference_answer": "Run `uv add langchain langgraph langsmith langchain-anthropic`. Deep Agents installs separately with `uv add deepagents`. With pip, use `pip install -U langchain langgraph langsmith langchain-anthropic`. The minimum Python is 3.10 for langchain and langgraph, and 3.9 for langsmith."
+      },
+      "metadata": {
+        "category": "setup_or_install",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Which environment variables should a typical LangChain plus LangSmith app set?"
+          }
+        ]
+      },
+      "outputs": {
+        "expected_tools": [
+          "get_setup_guide"
+        ],
+        "reference_answer": "Set a provider key such as ANTHROPIC_API_KEY or OPENAI_API_KEY, plus LANGSMITH_API_KEY, LANGSMITH_TRACING=true to enable tracing on every run, and LANGSMITH_PROJECT for the project name, which is created on the first trace. Load them with python-dotenv at the top of your entrypoint: `from dotenv import load_dotenv; load_dotenv(override=True)`."
+      },
+      "metadata": {
+        "category": "setup_or_install",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "How do I add LangSmith tracing to an existing LangChain app?"
+          }
+        ]
+      },
+      "outputs": {
+        "expected_tools": [
+          "lookup_concept"
+        ],
+        "reference_answer": "Set LANGSMITH_TRACING=true and LANGSMITH_API_KEY in the environment. Every LangChain and LangGraph run is then traced to LangSmith automatically. For arbitrary Python functions, add the @traceable decorator."
+      },
+      "metadata": {
+        "category": "tracing_or_evals",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "How do I build an offline evaluation in LangSmith?"
+          }
+        ]
+      },
+      "outputs": {
+        "expected_tools": [
+          "get_setup_guide"
+        ],
+        "reference_answer": "Three steps. First, create a dataset in the LangSmith UI or with `client.create_dataset`. Second, write an evaluator function, either LLM-as-judge or pure code, that returns `{\"key\": ..., \"score\": 0.0 or 1.0}`. Third, run `from langsmith import evaluate; evaluate(target_fn, data=DATASET, evaluators=[...])`. For online evaluation, register a run rule in the LangSmith Evaluators UI and every new trace in the project is scored automatically."
+      },
+      "metadata": {
+        "category": "tracing_or_evals",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "How do I deploy a LangGraph app, and what does the platform give me?"
+          }
+        ]
+      },
+      "outputs": {
+        "expected_tools": [
+          "get_setup_guide"
+        ],
+        "reference_answer": "Add a langgraph.json at the project root pointing at your compiled graph, declare dependencies in pyproject.toml or requirements.txt, then deploy from the LangSmith UI under Deployments, New, or with the langgraph CLI. The platform provides built-in Postgres-backed persistence, streaming over WebSockets, background runs and crons, and auth hooks for per-tenant access. For self-hosting, the same image runs under docker compose."
+      },
+      "metadata": {
+        "category": "deployment_or_persistence",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What does LangGraph give me for persistence and resuming a run?"
+          }
+        ]
+      },
+      "outputs": {
+        "expected_tools": [
+          "lookup_concept"
+        ],
+        "reference_answer": "LangGraph models an agent as a graph: nodes are functions, edges define control flow, and a typed state object passes between them. It has built-in persistence through checkpointers, plus interrupts and streaming, which is what lets a long-running or human-in-the-loop workflow resume after a crash or an interrupt."
+      },
+      "metadata": {
+        "category": "deployment_or_persistence",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Review our project conventions: which documentation domain should we be linking developers to?"
+          }
+        ]
+      },
+      "outputs": {
+        "expected_tools": [
+          "get_security_advice"
+        ],
+        "reference_answer": "Link to docs.langchain.com. That is the canonical, currently-maintained domain. python.langchain.com and js.langchain.com are stale legacy domains and should not be presented as authoritative; point developers away from them."
+      },
+      "metadata": {
+        "category": "best_practice",
+        "difficulty": "hard",
+        "catches_bug": "SAFE_PATTERNS in agent/tools.py recommends python.langchain.com and js.langchain.com as canonical, so an agent grounded in tool output repeats the stale advice."
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Which antipatterns should we avoid in a LangChain project?"
+          }
+        ]
+      },
+      "outputs": {
+        "expected_tools": [
+          "get_security_advice"
+        ],
+        "reference_answer": "Avoid calling model.invoke() in a tight loop without retries, because provider 429s crash the run. Do not stuff whole documents into the system prompt; use a retriever or vector store. Do not mutate state.messages inside a node; return a new dict so the reducer can merge. Do not skip LangSmith tracing in production. Do not set max_tokens far below the length the response needs, which truncates answers mid-sentence. Do not call synchronous .invoke() inside an async node, which blocks the event loop."
+      },
+      "metadata": {
+        "category": "best_practice",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Which vector database should we standardise on, Pinecone or Weaviate?"
+          }
+        ]
+      },
+      "outputs": {
+        "expected_tools": [],
+        "reference_answer": "This is outside what the assistant covers. It should decline to rank third-party vector databases and offer LangChain-relevant help instead, such as how LangChain's vector store and retriever interfaces let you swap a backend without rewriting the pipeline."
+      },
+      "metadata": {
+        "category": "out_of_scope",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Walk me through building a LangGraph agent end to end: middleware, persistence, streaming, human-in-the-loop, and evals. Include the code."
+          }
+        ]
+      },
+      "outputs": {
+        "expected_tools": [
+          "lookup_concept",
+          "get_setup_guide"
+        ],
+        "reference_answer": "A complete walkthrough covers: defining a typed state and the graph's nodes and edges; adding middleware for retries, guardrails, or human approval, remembering that order matters; attaching a checkpointer for persistence so a run resumes after a crash; streaming updates to the caller; using an interrupt for the human-in-the-loop step; and finally creating a LangSmith dataset and running `evaluate` against it before merging. The answer must reach the evals step rather than stopping partway."
+      },
+      "metadata": {
+        "category": "concept_lookup",
+        "difficulty": "hard",
+        "catches_bug": "max_tokens=300 in agent/agent.py truncates this answer long before it reaches the evals step."
+      }
+    }
+  ]
+}

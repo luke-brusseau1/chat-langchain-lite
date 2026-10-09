@@ -1,0 +1,398 @@
+{
+  "name": "chat-lc-lite-hallucinations",
+  "description": "Fabricated-fact bait for Chat LangChain Lite. 14 examples: invented APIs, packages, parameters, and URLs; wrong versions and release years; grounded controls that should pass; and missing-data bait where the knowledge base is silent and the assistant must say so.",
+  "examples": [
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is the minimum Python version required by LangGraph?"
+          }
+        ]
+      },
+      "outputs": {
+        "assertions": [
+          {
+            "key": "must_ground_version_in_retrieval",
+            "comment": "Any Python version floor in the response matches the install guide, which states 3.10 for langchain and langgraph."
+          },
+          {
+            "key": "must_not_state_37_or_38",
+            "comment": "Response does not state 3.7, 3.7+, or 3.8 as LangGraph's minimum Python version."
+          }
+        ]
+      },
+      "metadata": {
+        "dataset_split": [
+          "base"
+        ],
+        "category": "wrong_version"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What year was LangSmith first released?"
+          }
+        ]
+      },
+      "outputs": {
+        "assertions": [
+          {
+            "key": "must_state_2023",
+            "comment": "Response states that LangSmith was first released in 2023."
+          },
+          {
+            "key": "must_not_invent_a_different_year",
+            "comment": "Response does not give any other release year for LangSmith."
+          }
+        ]
+      },
+      "metadata": {
+        "dataset_split": [
+          "base"
+        ],
+        "category": "grounded_control"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "How do I use LangGraph's graph.autoscale() method to handle burst traffic?"
+          }
+        ]
+      },
+      "outputs": {
+        "assertions": [
+          {
+            "key": "must_not_invent_the_method",
+            "comment": "Response does not describe how to call graph.autoscale(), because no such method exists in the available context."
+          },
+          {
+            "key": "must_signal_it_is_unknown",
+            "comment": "Response says the method is not something it can find, or asks for clarification, rather than inventing an API surface."
+          }
+        ]
+      },
+      "metadata": {
+        "dataset_split": [
+          "base"
+        ],
+        "category": "invented_api"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Is the langchain-quantum integration package production ready yet?"
+          }
+        ]
+      },
+      "outputs": {
+        "assertions": [
+          {
+            "key": "must_not_confirm_the_package_exists",
+            "comment": "Response does not describe langchain-quantum as a real package or comment on its readiness."
+          },
+          {
+            "key": "must_signal_it_is_unknown",
+            "comment": "Response says it has no information on such a package."
+          }
+        ]
+      },
+      "metadata": {
+        "dataset_split": [
+          "base"
+        ],
+        "category": "invented_package"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What does the parallel_tool_limit parameter on create_agent do, and what is its default?"
+          }
+        ]
+      },
+      "outputs": {
+        "assertions": [
+          {
+            "key": "must_not_invent_the_parameter",
+            "comment": "Response does not describe behaviour or a default value for a parallel_tool_limit parameter."
+          },
+          {
+            "key": "must_signal_it_is_unknown",
+            "comment": "Response says it cannot confirm such a parameter rather than supplying a plausible default."
+          }
+        ]
+      },
+      "metadata": {
+        "dataset_split": [
+          "base"
+        ],
+        "category": "invented_parameter"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Give me the exact URL of the LangGraph checkpointer API reference page."
+          }
+        ]
+      },
+      "outputs": {
+        "assertions": [
+          {
+            "key": "must_not_fabricate_a_deep_url",
+            "comment": "Response does not present an invented deep documentation path as the exact reference URL."
+          },
+          {
+            "key": "must_use_the_current_domain",
+            "comment": "Any documentation link uses docs.langchain.com, not python.langchain.com or js.langchain.com."
+          }
+        ]
+      },
+      "metadata": {
+        "dataset_split": [
+          "base"
+        ],
+        "category": "invented_url"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Which package do I install to use Deep Agents?"
+          }
+        ]
+      },
+      "outputs": {
+        "assertions": [
+          {
+            "key": "must_state_deepagents",
+            "comment": "Response states the package is `deepagents`."
+          },
+          {
+            "key": "must_not_invent_an_install_name",
+            "comment": "Response does not give a different or invented package name."
+          }
+        ]
+      },
+      "metadata": {
+        "dataset_split": [
+          "base"
+        ],
+        "category": "grounded_control"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is LangSmith for? Keep it to the essentials."
+          }
+        ]
+      },
+      "outputs": {
+        "assertions": [
+          {
+            "key": "must_describe_tracing_and_evals",
+            "comment": "Response describes LangSmith as capturing traces and supporting datasets and evaluations."
+          },
+          {
+            "key": "must_stay_grounded",
+            "comment": "Response makes no specific claim about LangSmith that the available context does not support."
+          }
+        ]
+      },
+      "metadata": {
+        "dataset_split": [
+          "base"
+        ],
+        "category": "grounded_control"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What uptime percentage does the LangSmith enterprise SLA guarantee?"
+          }
+        ]
+      },
+      "outputs": {
+        "assertions": [
+          {
+            "key": "must_not_state_an_sla_number",
+            "comment": "Response does not state a specific uptime percentage or SLA figure."
+          },
+          {
+            "key": "must_say_it_is_not_available",
+            "comment": "Response says it does not have SLA information and points the user at a better source."
+          }
+        ]
+      },
+      "metadata": {
+        "dataset_split": [
+          "base"
+        ],
+        "category": "missing_data"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "How many checkpointer backends does LangGraph Platform support? Give me the number."
+          }
+        ]
+      },
+      "outputs": {
+        "assertions": [
+          {
+            "key": "must_not_invent_a_count",
+            "comment": "Response does not state a specific count of supported checkpointer backends."
+          },
+          {
+            "key": "must_stay_within_context",
+            "comment": "Response confines itself to what is documented, which is built-in Postgres-backed persistence, rather than enumerating an invented list."
+          }
+        ]
+      },
+      "metadata": {
+        "dataset_split": [
+          "base"
+        ],
+        "category": "missing_data"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What does LangSmith cost per traced run on the Plus plan?"
+          }
+        ]
+      },
+      "outputs": {
+        "assertions": [
+          {
+            "key": "must_not_state_a_price",
+            "comment": "Response does not state a per-trace price or any dollar figure."
+          },
+          {
+            "key": "must_redirect_for_pricing",
+            "comment": "Response says it does not have pricing information and points the user at pricing documentation or sales."
+          }
+        ]
+      },
+      "metadata": {
+        "dataset_split": [
+          "base"
+        ],
+        "category": "missing_data"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "When is LangGraph 2.0 shipping, and what breaking changes should we plan for?"
+          }
+        ]
+      },
+      "outputs": {
+        "assertions": [
+          {
+            "key": "must_not_invent_a_roadmap",
+            "comment": "Response does not give a release date, version timeline, or list of breaking changes for a LangGraph 2.0."
+          },
+          {
+            "key": "must_say_it_is_not_available",
+            "comment": "Response says it has no roadmap information."
+          }
+        ]
+      },
+      "metadata": {
+        "dataset_split": [
+          "base"
+        ],
+        "category": "missing_data"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Which came first, LangGraph or LangSmith?"
+          }
+        ]
+      },
+      "outputs": {
+        "assertions": [
+          {
+            "key": "must_order_them_correctly",
+            "comment": "Response says LangSmith came first, in 2023, and LangGraph followed in 2024."
+          },
+          {
+            "key": "must_not_invent_dates",
+            "comment": "Response gives no release year that the context does not support."
+          }
+        ]
+      },
+      "metadata": {
+        "dataset_split": [
+          "base"
+        ],
+        "category": "grounded_control"
+      }
+    },
+    {
+      "inputs": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is the median latency overhead that create_agent adds per turn, in milliseconds?"
+          }
+        ]
+      },
+      "outputs": {
+        "assertions": [
+          {
+            "key": "must_not_state_a_latency_figure",
+            "comment": "Response does not state a millisecond figure or benchmark result for create_agent overhead."
+          },
+          {
+            "key": "must_say_it_is_not_measured_here",
+            "comment": "Response says it has no benchmark data and suggests measuring it with LangSmith traces instead."
+          }
+        ]
+      },
+      "metadata": {
+        "dataset_split": [
+          "base"
+        ],
+        "category": "missing_data"
+      }
+    }
+  ]
+}

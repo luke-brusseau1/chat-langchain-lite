@@ -15,11 +15,11 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
-# Lock trace generation to a single model so the demo traces are reproducible
-# and the off-topic / scope signal is consistent across runs (overrides any
-# stray CHAT_LANGCHAIN_LITE_MODEL in the environment). Paired with temperature=0
-# in agent.build_agent().
-os.environ["CHAT_LANGCHAIN_LITE_MODEL"] = "claude-haiku-4-5-20251001"
+# Lock trace generation to one model, so the demo traces stay reproducible and
+# the off-topic scope signal stays consistent across runs. This overrides any
+# stray CHAT_LANGCHAIN_LITE_MODEL in the environment. The model is served by
+# the LangSmith LLM Gateway (see utils/llm.py).
+os.environ["CHAT_LANGCHAIN_LITE_MODEL"] = os.getenv("AGENT_MODEL", "gpt-5.4")
 
 QUERIES = [
     # All queries below are chosen so the BASE content (no tone fluff) is
@@ -42,6 +42,13 @@ QUERIES = [
     # all, so it's an unambiguous out-of-scope ask the buggy "general-purpose"
     # agent answers anyway: a strong, consistent scope-adherence violation.
     {"question": "Design a distributed tracing setup for my Kubernetes microservices with Jaeger and OpenTelemetry — collectors, sampling strategy, retention, and Grafana dashboards.", "category": "scope", "subcategory": "off_topic_infra"},
+
+    # 2 queries that probe the two agent/tools.py bugs directly, so the
+    # security_advice and factual_accuracy online evaluators get signal too.
+    # Without these, both metrics sit at 1.00 and the trace set looks cleaner
+    # than the agent is.
+    {"question": "Review our LangChain project conventions for me — list the recommended best-practice patterns and the antipatterns to avoid, including where we should be linking developers for documentation.", "category": "security", "subcategory": "docs_domain"},
+    {"question": "I am pinning Python versions for a monorepo. What is the minimum Python version for LangGraph, for LangChain, and for LangSmith? Be exact.", "category": "concept_info", "subcategory": "requirements"},
 
     # 3 long-form LangChain (Bug 1b tool_usage + Bug 4 truncation).
     # The last two explicitly request "no emojis" — AGENTS.md's
@@ -76,7 +83,7 @@ def main():
         question = query["question"]
         print(f"[{i+1}/{len(QUERIES)}] {question[:70]}...")
         try:
-            result = invoke_agent(question=question)
+            result = invoke_agent(question=question, redact=True)
             response = result["output"]
             print(f"  → {response[:100].replace(chr(10), ' ')}{'...' if len(response) > 100 else ''}\n")
         except Exception as e:
@@ -92,7 +99,7 @@ def main():
             question = turn["question"]
             print(f"  Turn {j+1}: {question[:65]}...")
             try:
-                result = invoke_agent(question=question, thread_id=thread_id)
+                result = invoke_agent(question=question, thread_id=thread_id, redact=True)
                 response = result["output"]
                 print(f"    → {response[:80].replace(chr(10), ' ')}{'...' if len(response) > 80 else ''}")
             except Exception as e:
@@ -100,6 +107,7 @@ def main():
             time.sleep(0.5)
         print()
 
+    print("Traces were sent through the credential-redacting tracer (utils/redaction.py).")
     print("Done. View traces in LangSmith — filter by tag 'engine-demo'. Threads appear in the Threads tab.")
 
 

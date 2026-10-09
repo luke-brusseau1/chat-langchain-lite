@@ -1,4 +1,13 @@
 .env
+.env.*
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+credentials.json
+token.json
 .demo_state.json
 .venv/
 __pycache__/
@@ -14,6 +23,3 @@ build/
 .langgraph_api/
 .sesskey
 .claude/
-
-# superpowers docs
-docs/

@@ -22,6 +22,7 @@ from langsmith import Client
 from langsmith.schemas import FileEntry
 
 from context import CONTEXT_HUB_REPO
+from evals.dataset import DEMO_PRESENTER
 
 _API = "https://api.smith.langchain.com/api/v1"
 
@@ -196,6 +197,16 @@ Markdown: `## What changed` / `## Look at carefully` / `## Risk flags`.
 }
 
 
+# Skill repo handles, scoped per presenter.
+#
+# Context Hub repo handles are workspace-wide. Presenters share one workspace,
+# so an unscoped handle such as "release-notes-skill" belongs to whoever
+# created it first, and every other presenter gets a 403 "restricted mode" on
+# push. The suffix gives each presenter their own repos, and matches how the
+# dataset, the project, and the agent repo are already scoped.
+DEMO_SKILL_NAMES = tuple(f"{name}-{DEMO_PRESENTER}" for name in _DEMO_SKILLS)
+
+
 def push_demo_skills() -> None:
     """Seed a handful of standalone Skill repos in Context Hub.
 
@@ -213,7 +224,8 @@ def push_demo_skills() -> None:
         headers["X-Tenant-Id"] = ws
 
     client = Client()
-    for skill_name, skill_content in _DEMO_SKILLS.items():
+    for base_name, skill_content in _DEMO_SKILLS.items():
+        skill_name = f"{base_name}-{DEMO_PRESENTER}"
         # Create the repo with source=internal so it shows in the Context Hub UI
         requests.post(
             f"{_API}/repos/",
@@ -223,9 +235,14 @@ def push_demo_skills() -> None:
                 "repo_type": "skill",
                 "source": "internal",
                 "is_public": False,
-                "description": f"Demo skill — {skill_name.replace('-', ' ').replace(' skill', '').title()}",
+                "description": f"Demo skill — {base_name.replace('-', ' ').replace(' skill', '').title()}",
             },
         )
-        # Commit the SKILL.md
-        client.push_skill(skill_name, files={"SKILL.md": FileEntry(content=skill_content)})
-        print(f"  ✓ {skill_name}")
+        # Commit the SKILL.md. A repo another presenter owns returns 403
+        # "restricted mode"; report it and keep going, because the demo skills
+        # are illustrative and must not block setup.
+        try:
+            client.push_skill(skill_name, files={"SKILL.md": FileEntry(content=skill_content)})
+            print(f"  ✓ {skill_name}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"  ⚠️  {skill_name}: could not push ({str(exc)[:120]})")

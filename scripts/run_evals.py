@@ -107,7 +107,9 @@ ONLINE_EVALUATORS = [
 
 def setup_online_eval():
     import requests
-    from langchain_anthropic import ChatAnthropic
+    from langchain_openai import ChatOpenAI
+
+    from utils.llm import judge_model_id
 
     api_key = os.getenv("LANGSMITH_API_KEY")
     if not api_key:
@@ -125,7 +127,9 @@ def setup_online_eval():
 
     print(f"\nSetting up online evaluators on project '{PROJECT_NAME}'...")
 
-    model_json = ChatAnthropic(model="claude-haiku-4-5-20251001").to_json()
+    # No api_key or base_url in the serialized judge: the rule runs server-side
+    # and LangSmith resolves the provider from the workspace configuration.
+    model_json = ChatOpenAI(model=judge_model_id()).to_json()
 
     for ev in ONLINE_EVALUATORS:
         payload = {

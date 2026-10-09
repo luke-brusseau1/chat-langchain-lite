@@ -24,7 +24,6 @@ import asyncio
 import base64
 import contextlib
 import json
-import logging
 import os
 import re
 import secrets
@@ -32,7 +31,6 @@ import uuid
 from pathlib import Path
 from urllib.parse import urlparse
 
-import httpx
 from dotenv import load_dotenv
 from fasthtml.common import (
     FT,
@@ -104,7 +102,6 @@ def _api_url() -> str:
     return url
 
 
-_log = logging.getLogger(__name__)
 _LS_CLIENT: Client | None = None
 
 
@@ -269,43 +266,6 @@ button{font-family:inherit;cursor:pointer;}
   flex:0 0 38px;transition:background .15s,opacity .15s;}
 .send-btn:hover{background:var(--accent-2);}
 .composer-hint{text-align:center;color:var(--faint);font-size:11px;margin-top:8px;}
-
-/* ── Gateway pane ── */
-.gw-open{margin-left:auto;background:transparent;border:1px solid var(--border);color:var(--muted);
-  padding:6px 10px;border-radius:8px;font-size:12.5px;display:flex;align-items:center;gap:6px;
-  transition:border-color .15s,color .15s;}
-.gw-open:hover{border-color:var(--accent);color:var(--text);}
-.gw-pane{position:fixed;inset:0;z-index:50;pointer-events:none;}
-.gw-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.45);opacity:0;transition:opacity .2s;}
-.gw-drawer{position:absolute;top:0;right:0;height:100%;width:340px;max-width:88vw;background:var(--panel);
-  border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;
-  transform:translateX(100%);transition:transform .22s ease;}
-.gw-pane.open{pointer-events:auto;}
-.gw-pane.open .gw-backdrop{opacity:1;}
-.gw-pane.open .gw-drawer{transform:translateX(0);}
-.gw-head{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);}
-.gw-title{flex:1;font-weight:600;}
-.gw-body{flex:1;overflow-y:auto;padding:16px;}
-.gw-badge{font-size:12px;color:var(--code);margin-bottom:8px;}
-.gw-card{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:12px;}
-.gw-model{font-weight:600;}
-.gw-endpoint{color:var(--muted);font-size:12px;font-family:'JetBrains Mono',monospace;margin-top:2px;
-  overflow-wrap:anywhere;}
-.gw-h{font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--faint);
-  margin:18px 0 8px;}
-.gw-sec{font-size:12px;font-weight:600;color:var(--muted);margin:12px 0 6px;}
-.gw-policy{border:1px solid var(--border);border-radius:9px;padding:9px 11px;margin-bottom:8px;
-  background:var(--panel-2);}
-.gw-p-name{font-size:13px;font-weight:500;}
-.gw-p-line{display:flex;align-items:center;gap:8px;margin-top:4px;}
-.gw-p-sub{color:var(--muted);font-size:12px;overflow-wrap:anywhere;}
-.gw-p-tag{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.4px;}
-.gw-p-val{margin-left:auto;font-size:12px;font-family:'JetBrains Mono',monospace;}
-.gw-p-badge{margin-left:auto;font-size:11px;color:var(--code);border:1px solid var(--border);
-  border-radius:6px;padding:1px 7px;}
-.gw-bar{height:6px;background:#000;border-radius:4px;margin-top:8px;overflow:hidden;}
-.gw-bar-fill{height:100%;background:var(--accent);}
-.gw-note{color:var(--muted);font-size:13px;}
 """
 
 HEAD = (
@@ -444,13 +404,6 @@ document.body.addEventListener('htmx:afterRequest',function(e){
   }
   scrollDown();
 });
-// ---- gateway pane (open loads /gateway into #gw-body via htmx) ----
-function openGateway(){
-  var b=document.getElementById('gw-body'); if(b) b.innerHTML='<div class="gw-note">Loading…</div>';
-  var p=document.getElementById('gw-pane'); if(p) p.classList.add('open');
-}
-function closeGateway(){ var p=document.getElementById('gw-pane'); if(p) p.classList.remove('open'); }
-document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeGateway(); });
 function init(){ applySidebar(); renderThreads(); startObserver(); renderAll(); scrollDown(); }
 if(document.readyState==='loading') window.addEventListener('DOMContentLoaded',init); else init();
 """
@@ -604,15 +557,6 @@ def topbar() -> FT:
     return Header(
         Button("☰", cls="icon-btn", title="Toggle sidebar", onclick="toggleSidebar()"),
         Div(Img(src=LOGO), Span("Chat LangChain Lite"), cls="brand"),
-        Button(
-            "🛡 Gateway",
-            cls="gw-open",
-            title="LangSmith Gateway config",
-            hx_get="/gateway",
-            hx_target="#gw-body",
-            hx_swap="innerHTML",
-            onclick="openGateway()",
-        ),
         cls="topbar",
     )
 
@@ -652,7 +596,6 @@ def page(body_children: list[FT], thread_id: str) -> FT:
             composer(),
             cls="main",
         ),
-        gateway_drawer(),
         Script(f"window.CLC_THREAD={json.dumps(thread_id)};"),
         Script(CLIENT_JS),
         cls="app",
@@ -660,167 +603,7 @@ def page(body_children: list[FT], thread_id: str) -> FT:
     )
 
 
-# ── Gateway config pane ───────────────────────────────────────────────────────
-GATEWAY_HOST = "gateway.smith.langchain.com"
-
-
-def _money(v) -> str:
-    return f"${v:,.2f}" if isinstance(v, (int, float)) else "—"
-
-
-def _spend_row(p: dict) -> FT:
-    cfg = p.get("config") or {}
-    limit, spent = cfg.get("limit_usd"), p.get("current_spend_usd")
-    pct = 0
-    if isinstance(limit, (int, float)) and limit > 0 and isinstance(spent, (int, float)):
-        pct = max(0, min(100, round(spent / limit * 100)))
-    return Div(
-        Div(p.get("name") or "Spend cap", cls="gw-p-name"),
-        Div(
-            Span(f'{cfg.get("window") or ""} cap', cls="gw-p-tag"),
-            Span(f"{_money(spent)} / {_money(limit)}", cls="gw-p-val"),
-            cls="gw-p-line",
-        ),
-        Div(Div(cls="gw-bar-fill", style=f"width:{pct}%"), cls="gw-bar"),
-        cls="gw-policy",
-    )
-
-
-def _guard_row(p: dict) -> FT:
-    detect = (p.get("config") or {}).get("detect") or {}
-    cats = ", ".join(sorted(detect)) if isinstance(detect, dict) else ""
-    action = p.get("action") or ""
-    return Div(
-        Div(p.get("name") or "Guardrail", cls="gw-p-name"),
-        Div(
-            Span(cats or "enabled", cls="gw-p-sub"),
-            Span(action, cls="gw-p-badge") if action else None,
-            cls="gw-p-line",
-        ),
-        cls="gw-policy",
-    )
-
-
-def _rate_row(p: dict) -> FT:
-    limits = (p.get("config") or {}).get("limits") or []
-    parts = [
-        f'{l.get("limit")} {l.get("metric") or "requests"} / {l.get("window") or ""}'
-        for l in limits
-        if isinstance(l, dict)
-    ]
-    return Div(
-        Div(p.get("name") or "Rate limit", cls="gw-p-name"),
-        Div(Span("; ".join(parts) or "configured", cls="gw-p-sub"), cls="gw-p-line"),
-        cls="gw-policy",
-    )
-
-
-def _generic_row(p: dict) -> FT:
-    return Div(
-        Div(p.get("name") or p.get("policy_type") or "Policy", cls="gw-p-name"),
-        Div(Span(p.get("description") or "", cls="gw-p-sub"), cls="gw-p-line"),
-        cls="gw-policy",
-    )
-
-
-# policy_type → (section, renderer). name/description render as escaped text nodes.
-_POLICY_RENDER = {
-    "guard": ("Guardrails", _guard_row),
-    "spend_cap": ("Cost caps", _spend_row),
-    "default_spend_cap": ("Cost caps", _spend_row),
-    "rate_limit": ("Rate limits", _rate_row),
-    "default_rate_limit": ("Rate limits", _rate_row),
-    "route_config": ("Routing", _generic_row),
-}
-_POLICY_SECTIONS = ["Guardrails", "Cost caps", "Rate limits", "Routing"]
-
-
-def _fetch_policies() -> list[dict]:
-    """Org gateway policies, via the already-configured LangSmith host + key."""
-    client = _ls()
-    # Deployments strip LANGSMITH_API_KEY from the app env (auth handled
-    # internally), so use the key the client resolved; fall back to the gateway
-    # key that persists there.
-    key = client.api_key or os.environ.get("LANGSMITH_API_KEY_GATEWAY", "")
-    resp = httpx.get(
-        f"{client.api_url}/v1/platform/gateway-policies",
-        headers={"X-Api-Key": key},
-        timeout=10,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    return data if isinstance(data, list) else []
-
-
-def _policy_rows() -> list[FT]:
-    groups: dict[str, list[FT]] = {s: [] for s in _POLICY_SECTIONS}
-    for p in _fetch_policies():
-        if not isinstance(p, dict) or not p.get("enabled"):
-            continue
-        section, render = _POLICY_RENDER.get(p.get("policy_type"), ("Routing", _generic_row))
-        groups[section].append(render(p))
-    out: list[FT] = []
-    for section in _POLICY_SECTIONS:
-        if groups[section]:
-            out.append(Div(section, cls="gw-sec"))
-            out.extend(groups[section])
-    return out
-
-
-def gateway_drawer() -> FT:
-    return Div(
-        Div(cls="gw-backdrop", onclick="closeGateway()"),
-        Aside(
-            Div(
-                Span("LangSmith Gateway", cls="gw-title"),
-                Button("✕", cls="icon-btn", title="Close", onclick="closeGateway()"),
-                cls="gw-head",
-            ),
-            Div(Div("Loading…", cls="gw-note"), id="gw-body", cls="gw-body"),
-            cls="gw-drawer",
-        ),
-        id="gw-pane",
-        cls="gw-pane",
-    )
-
-
 # ── Routes ────────────────────────────────────────────────────────────────────
-@rt("/gateway")
-async def gateway(session):
-    """Gateway pane fragment: model/routing card + live enabled policies."""
-    # Lazy import: the graph already imported utils.models in-process, so this is
-    # cached; keeping it out of module scope avoids coupling app startup to the
-    # model provider package.
-    try:
-        from utils.models import MODEL_CONFIG
-    except Exception:
-        MODEL_CONFIG = {}
-    base_url = MODEL_CONFIG.get("base_url") or ""
-    card = Div(
-        Div("🛡 Routed via Gateway" if GATEWAY_HOST in base_url else "⚡ Direct connection", cls="gw-badge"),
-        Div(
-            Div(f'{MODEL_CONFIG.get("provider", "")} · {MODEL_CONFIG.get("model", "")}', cls="gw-model"),
-            Div(urlparse(base_url).hostname or "direct", cls="gw-endpoint"),
-            cls="gw-card",
-        ),
-        cls="gw-routing",
-    )
-    try:
-        rows = await asyncio.to_thread(_policy_rows)
-        body = rows or [Div("No enabled policies.", cls="gw-note")]
-    except Exception as e:
-        # Degrade quietly for the user; log server-side (type + status only, no
-        # secrets/URL) so failures stay diagnosable.
-        status = getattr(getattr(e, "response", None), "status_code", None)
-        _log.warning(
-            "gateway policies unavailable: %s%s",
-            type(e).__name__,
-            f" (HTTP {status})" if status else "",
-        )
-        body = [Div("Live policies unavailable.", cls="gw-note")]
-    return Div(card, Div("Active policies", cls="gw-h"), *body)
-
-
 @rt("/")
 async def index(session, new: str = "", thread: str = ""):
     if new:

@@ -283,15 +283,130 @@ def create_online_evaluator(api_key: str, ev: dict, project_id: str, model_json:
         return None
 
 
+# Serialization templates for a server-side judge, one per provider. The
+# credential is always a NAMED workspace-secret pointer, never a value, so no
+# secret is stored inside the run rule — LangSmith resolves it at scoring time.
+_JUDGE_PROVIDERS = {
+    "openai": {
+        "id": ["langchain", "chat_models", "openai", "ChatOpenAI"],
+        "key_kwarg": "openai_api_key",
+        "secret": "OPENAI_API_KEY",
+        "default_model": None,  # falls through to utils.llm.judge_model_id()
+    },
+    "anthropic": {
+        "id": ["langchain", "chat_models", "anthropic", "ChatAnthropic"],
+        "key_kwarg": "anthropic_api_key",
+        "secret": "ANTHROPIC_API_KEY",
+        "default_model": "claude-sonnet-5",
+    },
+}
+
+
+def _workspace_secret_names(api_key: str) -> set:
+    """Names (not values) of the secrets this workspace has configured."""
+    resp = requests.get(
+        "https://api.smith.langchain.com/api/v1/workspaces/current/secrets",
+        headers=_ls_headers(api_key),
+    )
+    if resp.status_code != 200:
+        return set()
+    body = resp.json()
+    rows = body if isinstance(body, list) else body.get("secrets", [])
+    return {r.get("key") for r in rows if isinstance(r, dict) and r.get("key")}
+
+
+def _provider_judge_json(provider: str) -> dict:
+    spec = _JUDGE_PROVIDERS[provider]
+    model = os.getenv("EVAL_JUDGE_MODEL", "").strip() or spec["default_model"]
+    if not model:
+        from utils.llm import judge_model_id
+
+        model = judge_model_id()
+    print(f"  Judge model: {spec['id'][-1]}({model}) via workspace secret {spec['secret']}")
+    return {
+        "lc": 1,
+        "type": "constructor",
+        "id": spec["id"],
+        "kwargs": {
+            "model": model,
+            spec["key_kwarg"]: {"lc": 1, "type": "secret", "id": [spec["secret"]]},
+        },
+    }
+
+
+def judge_model_json(api_key: str) -> dict:
+    """Serialized judge model for the server-side online evaluators.
+
+    These rules run INSIDE LangSmith, not locally, so the judge has to be a
+    model the WORKSPACE can resolve — the local LLM Gateway credentials in
+    .env are not in play here. Whatever shape is returned, the provider
+    credential is only ever a named-secret POINTER, so the rule stores no
+    secret value.
+
+    Resolution order:
+      1. EVAL_JUDGE_MODEL_CONFIG — name of a workspace Model Configuration
+         (Settings -> Model configurations). Most explicit; use it to pin one.
+      2. EVAL_JUDGE_PROVIDER — 'openai' or 'anthropic', wired to that
+         provider's conventional workspace secret.
+      3. Auto-detect: pick a provider whose secret this workspace actually has.
+         This is what lets the same script work across workspaces wired to
+         different providers.
+      4. Bare ChatOpenAI, carrying no credential at all, and let LangSmith
+         resolve whatever it has. This is the original upstream behaviour.
+
+    EVAL_JUDGE_MODEL overrides the model id for options 2 and 3.
+    """
+    wanted = os.getenv("EVAL_JUDGE_MODEL_CONFIG", "").strip()
+    if wanted:
+        resp = requests.get(
+            "https://api.smith.langchain.com/api/v1/playground-settings",
+            headers=_ls_headers(api_key),
+        )
+        if resp.status_code == 200:
+            match = next(
+                (
+                    c for c in resp.json()
+                    if c.get("name") == wanted
+                    and c.get("settings")
+                    and c.get("available_in_evaluators")
+                ),
+                None,
+            )
+            if match:
+                print(f"  Judge model: workspace configuration '{wanted}'")
+                return match["settings"]
+        print(
+            f"  \u26a0\ufe0f  Model configuration '{wanted}' not found or not "
+            "available to evaluators; falling back."
+        )
+
+    forced = os.getenv("EVAL_JUDGE_PROVIDER", "").strip().lower()
+    if forced in _JUDGE_PROVIDERS:
+        return _provider_judge_json(forced)
+    if forced:
+        print(f"  \u26a0\ufe0f  Unknown EVAL_JUDGE_PROVIDER '{forced}'; auto-detecting.")
+
+    available = _workspace_secret_names(api_key)
+    for provider, spec in _JUDGE_PROVIDERS.items():
+        if spec["secret"] in available:
+            return _provider_judge_json(provider)
+
+    from langchain_openai import ChatOpenAI
+
+    from utils.llm import judge_model_id
+
+    print(f"  Judge model: ChatOpenAI({judge_model_id()}) resolved by the workspace")
+    return ChatOpenAI(model=judge_model_id()).to_json()
+
+
 def setup_online_evaluators(api_key: str) -> list:
     from langsmith import Client
-    from langchain_anthropic import ChatAnthropic
 
     print(f"\n[3/4] Setting up online evaluators on project '{PROJECT_NAME}'...")
 
     ls_client = Client()
     project_id = get_project_id(ls_client, PROJECT_NAME)
-    model_json = ChatAnthropic(model="claude-haiku-4-5-20251001").to_json()
+    model_json = judge_model_json(api_key)
 
     delete_existing_evaluators(api_key)
 
@@ -301,9 +416,12 @@ def setup_online_evaluators(api_key: str) -> list:
         if rule_id:
             our_rule_ids.append(rule_id)
 
-    print("\n  Every future trace will be automatically scored for:")
-    for ev in EVALUATORS:
-        print(f"    • {ev['feedback_key']}")
+    if our_rule_ids:
+        print("\n  Every future trace will be automatically scored for:")
+        for ev in EVALUATORS:
+            print(f"    • {ev['feedback_key']}")
+    else:
+        print("\n  ⚠️  No online evaluators were created — new traces will NOT be scored.")
 
     return our_rule_ids
 
@@ -313,13 +431,13 @@ def setup_online_evaluators(api_key: str) -> list:
 
 # ── Baseline experiments ───────────────────────────────────────────────────────
 
-# One baseline experiment per model. Both score ~100% on the permissive
-# seed dataset; the demo beat is the cost/latency comparison between
-# Haiku (cheap, fast) and Sonnet (more expensive, slower) in the
-# Experiments view while the PR's CI is running.
+# One baseline experiment per model. Both score near 100% on the permissive
+# seed dataset. The demo beat is the cost and latency comparison in the
+# Experiments view while the PR's CI runs. Both models are served by the
+# LangSmith LLM Gateway.
 _BASELINE_MODELS = [
-    ("claude-haiku-4-5-20251001", "haiku"),
-    ("claude-sonnet-4-6",         "sonnet"),
+    ("gpt-5.4",      "gpt-5.4"),
+    ("gpt-5.4-mini", "gpt-5.4-mini"),
 ]
 
 

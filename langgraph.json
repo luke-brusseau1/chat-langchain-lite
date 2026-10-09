@@ -1,7 +1,9 @@
 {
-  "dependencies": ["."],
+  "dependencies": [
+    "."
+  ],
   "graphs": {
-    "chat_langchain_lite": "./agent/agent.py:build_agent"
+    "chat_langchain_lite": "./agent/agent.py:build_serving_agent"
   },
   "env": ".env",
   "http": {

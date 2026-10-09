@@ -1,54 +1,171 @@
 name: Offline Evals
 
+# Runs offline experiments against the committed eval datasets on every PR to
+# main, so a reviewer sees post-fix results in LangSmith without redeploying
+# the agent. A strategy matrix runs the datasets in parallel, and each job
+# posts its own PR comment.
+
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, labeled]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+
+# One workflow run per PR. New commits cancel in-flight matrix jobs.
+concurrency:
+  group: offline-evals-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write   # needed to comment back on the PR
 
 jobs:
   evals:
-    # CI is MANUAL-LABEL gated. Engine opens both quick code-fix PRs (no
-    # eval gating wanted) and regression-prevention PRs (eval gating
-    # wanted). The presenter clicks the `run-evals` label on the latter to
-    # fire CI. Manual-labeled events trigger this workflow (unlike
-    # GITHUB_TOKEN-driven labels, which don't propagate).
-    if: contains(github.event.pull_request.labels.*.name, 'run-evals')
+    # CI is MANUAL-LABEL gated. Engine opens both quick code-fix PRs (no eval
+    # gating wanted) and regression-prevention PRs (eval gating wanted). The
+    # presenter clicks the `run-evals` label on the latter to fire CI.
+    # Manually-applied labels trigger this workflow, unlike GITHUB_TOKEN-driven
+    # ones, which do not propagate.
+    if: >
+      github.event.pull_request.draft == false &&
+      contains(github.event.pull_request.labels.*.name, 'run-evals')
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      # Don't cancel sibling jobs when one dataset fails. A missing dataset in
+      # a fresh workspace must not hide another dataset's result.
+      fail-fast: false
+      matrix:
+        include:
+          # Gate on the golden suite: 7 evaluators across the core behaviours.
+          - alias: golden
+            gate: "--gate"
+          # The guardrail suite reports but does not gate. Its threshold is
+          # calibrated for the FIXED Context Hub prompt, and the seeded demo
+          # state deliberately fails it, so gating here would block every PR
+          # until the prompt is fixed in the Context Hub UI.
+          - alias: guardrail
+            gate: ""
+          - alias: hallucinations
+            gate: ""
+          - alias: pii
+            gate: ""
+
     env:
-      # Everything routes through the LangSmith gateway — the agent model
-      # (utils/models.py) and the LLM-judge (evals/evaluators.py's Anthropic()).
-      # One gateway service key powers both; ANTHROPIC_BASE_URL makes the judge's
-      # bare Anthropic() client use the gateway instead of api.anthropic.com.
-      LANGSMITH_API_KEY_GATEWAY: ${{ secrets.LANGSMITH_API_KEY_GATEWAY }}
-      ANTHROPIC_API_KEY: ${{ secrets.LANGSMITH_API_KEY_GATEWAY }}
-      ANTHROPIC_BASE_URL: "https://gateway.smith.langchain.com/anthropic"
+      # The agent and the judges both call models through the LangSmith LLM
+      # Gateway, authenticated with LANGSMITH_GATEWAY_API_KEY. No provider key
+      # is needed here. LANGSMITH_API_KEY is used only for tracing and the
+      # platform API.
+      LANGSMITH_GATEWAY_API_KEY: ${{ secrets.LANGSMITH_GATEWAY_API_KEY }}
       LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
       LANGSMITH_PROJECT: ${{ secrets.LANGSMITH_PROJECT }}
       LANGSMITH_WORKSPACE_ID: ${{ secrets.LANGSMITH_WORKSPACE_ID }}
       DEMO_PRESENTER: ${{ vars.DEMO_PRESENTER }}
+      AGENT_MODEL: ${{ vars.AGENT_MODEL || 'gpt-5.4' }}
+      EVAL_JUDGE_MODEL: ${{ vars.EVAL_JUDGE_MODEL || 'gpt-5.4-mini' }}
       LANGSMITH_TRACING: "true"
+
     steps:
-      # Run a single "after" experiment on the PR branch. We dropped the
-      # "before" run because the most common demo fixes (AGENTS.md prompt,
-      # tone) live in Context Hub — the PR diff is empty for those, so
-      # before/after would score identically. The pre-seeded baseline
-      # experiments (baseline-haiku-…, baseline-sonnet-…) already give
-      # the presenter a "before" reference in the dataset's experiment
-      # view. The threshold check on this run is what gates merge.
-      - uses: actions/checkout@v4
+      - name: Checkout PR head
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.11"
+          enable-cache: true
 
-      - name: Install uv
-        run: pip install uv
+      - name: Set up Python
+        run: uv python install 3.13
 
       - name: Install dependencies
         run: uv sync
 
-      - name: Run evals on PR branch
+      - name: Run experiment (${{ matrix.alias }})
+        id: experiment
         run: |
-          uv run python -m scripts.run_evals --skip-dataset --threshold 0.7 --experiment-prefix "engine-${LANGSMITH_PROJECT}"
+          set -euo pipefail
+          PR=${{ github.event.pull_request.number }}
+          SHA_SHORT=$(git rev-parse --short "${{ github.event.pull_request.head.sha }}")
+          PREFIX="chat-lc-lite-${{ matrix.alias }}-pr-${PR}-${SHA_SHORT}"
+
+          # --gate makes this step exit 1 when the dataset's thresholds are not
+          # met, failing the check so branch protection blocks the merge.
+          uv run python evals/run_experiment.py "${{ matrix.alias }}" \
+            --experiment-prefix "$PREFIX" \
+            ${{ matrix.gate }} \
+            --metadata "pr_number=${PR}" \
+            --metadata "commit_sha=${{ github.event.pull_request.head.sha }}" \
+            --metadata "branch=${{ github.event.pull_request.head.ref }}" \
+            --metadata "ci_run_id=${{ github.run_id }}" \
+            | tee experiment.log
+
+          # Extract the CI-parseable lines the script prints.
+          echo "experiment_name=$(grep '^EXPERIMENT_NAME=' experiment.log | cut -d= -f2-)" >> "$GITHUB_OUTPUT"
+          echo "experiment_url=$(grep '^EXPERIMENT_URL=' experiment.log | cut -d= -f2-)" >> "$GITHUB_OUTPUT"
+          echo "dataset_name=$(grep '^DATASET_NAME=' experiment.log | cut -d= -f2-)" >> "$GITHUB_OUTPUT"
+          # Reproduce the score table for the PR comment.
+          {
+            echo 'scores<<SCORES_EOF'
+            sed -n '/^Scores:/,/^$/p' experiment.log | tail -n +2
+            echo 'SCORES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Comment on PR with the experiment link
+        if: success()
+        uses: actions/github-script@v7
+        env:
+          ALIAS: ${{ matrix.alias }}
+          GATED: ${{ matrix.gate }}
+          EXPERIMENT_NAME: ${{ steps.experiment.outputs.experiment_name }}
+          EXPERIMENT_URL: ${{ steps.experiment.outputs.experiment_url }}
+          DATASET_NAME: ${{ steps.experiment.outputs.dataset_name }}
+          SCORES: ${{ steps.experiment.outputs.scores }}
+        with:
+          script: |
+            const { ALIAS, GATED, EXPERIMENT_NAME, EXPERIMENT_URL, DATASET_NAME, SCORES } = process.env;
+            const body = [
+              `### LangSmith experiment — \`${ALIAS}\` ✅`,
+              ``,
+              `**Experiment:** \`${EXPERIMENT_NAME}\``,
+              `**Dataset:** \`${DATASET_NAME}\``,
+              `**Open in LangSmith:** ${EXPERIMENT_URL}`,
+              `**Merge gate:** ${GATED ? 'enforced' : 'reporting only'}`,
+              ``,
+              '```',
+              (SCORES || '(no scores parsed)').trim(),
+              '```',
+            ].join("\n");
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+      - name: Comment on PR with the failure
+        if: failure()
+        uses: actions/github-script@v7
+        env:
+          ALIAS: ${{ matrix.alias }}
+          GATED: ${{ matrix.gate }}
+        with:
+          script: |
+            const { ALIAS, GATED } = process.env;
+            const body = [
+              `### LangSmith experiment — \`${ALIAS}\` ❌`,
+              ``,
+              GATED
+                ? `The merge gate was not met, or the job errored. Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for the gate table.`
+                : `This job errored. Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).`,
+              ``,
+              `The other datasets' jobs complete independently.`,
+            ].join("\n");
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
